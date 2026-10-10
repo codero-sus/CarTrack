@@ -1,259 +1,323 @@
 # CarTrack — Technology Plan
 
-Status: **proposal, awaiting decisions** (see §8)
+Status: **stack recommended, awaiting confirmation** (see §10)
 Scope: one codebase shipping to **Windows, Linux, macOS, iOS, Android**.
+Genre: **3D arcade street racer** (Asphalt-style), single-player first.
 License posture: **proprietary / closed source, All Rights Reserved** (see `LICENSE`).
-Every option below permits shipping a closed-source binary; the differences are in *fees,
-royalties, and EULA risk*, which §7 covers.
 
 ---
 
-## 1. Verified environment constraints
+## 1. Decision record
 
-These were measured in this workspace, not assumed. They decide which stacks can actually be
-built and tested here.
-
-### 1.1 Toolchains present
-
-| Tool | Version | Notes |
+| Question | Answer | Source |
 |---|---|---|
-| node | v22.22.3 | LTS |
-| npm | 10.9.8 | working |
-| yarn | 1.22.22 | working |
-| python3 | 3.11.2 | working |
-| pip3 | 23.0.1 | PEP 668 externally-managed → use a venv |
-| gcc / g++ | 12.2.0 | Debian 12 |
-| dotnet | — | **not installed** |
-| rustc / cargo | — | **not installed** |
-| java / javac / gradle | — | **not installed** |
-| godot | — | **not installed** |
-| swift / xcodebuild | — | **not installed** |
-| clang | — | **not installed** |
+| 2D or 3D? | **3D** | you |
+| Genre | **"Something like Asphalt"** — arcade 3D street racing | you |
+| Platforms | Windows, Linux, macOS, iOS, Android | you |
+| Licensing | Closed source, All Rights Reserved | you, and `LICENSE` |
+| Stack | **Recommended below — Unity 6 + C# (URP)** | §5 |
 
-Host OS: `Linux 6.1.158+ x86_64` (Debian 12 container).
+### A note on "like Asphalt"
 
-### 1.2 Network allowlist (outbound)
+`Asphalt Legends` (formerly *Asphalt 9: Legends*) runs on Gameloft's **proprietary "Jet Engine"**
+with the **Bullet** physics library. That engine is not available to license, buy, or download —
+there is nothing to adopt. "Like Asphalt" therefore means we replicate the *feel*: arcade handling,
+nitro, jumps, near-miss traffic, cinematic chase camera, heavy VFX. The technology choice is
+entirely ours.
 
-| Host | Result |
+Also worth stating plainly: Asphalt is made by Gameloft Barcelona and ships 180+ cars. The scope
+gap versus a solo or small team is enormous, so §7 proposes a vertical slice rather than the whole
+thing.
+
+---
+
+## 2. Verified environment constraints
+
+Measured in this workspace, not assumed.
+
+### 2.1 Toolchains present
+
+| Tool | Version | Tool | Status |
+|---|---|---|---|
+| node | v22.22.3 | dotnet | **absent** |
+| npm | 10.9.8 | rustc / cargo | **absent** |
+| yarn | 1.22.22 | java / gradle | **absent** |
+| python3 | 3.11.2 | godot | **absent** |
+| pip3 | 23.0.1 | swift / xcodebuild | **absent** |
+| gcc / g++ | 12.2.0 | clang | **absent** |
+
+Host: `Linux 6.1.158+ x86_64`, Debian 12 container.
+
+### 2.2 Network allowlist (outbound)
+
+| Host | Result | | Host | Result |
+|---|---|---|---|---|
+| `registry.npmjs.org` | 200 | | `flutter.dev` | unreachable |
+| `pypi.org` | 200 | | `dotnet.microsoft.com` | unreachable |
+| `api.github.com` | 200 | | `static.rust-lang.org` | unreachable |
+| | | | `deb.debian.org` | unreachable |
+| | | | `objects.githubusercontent.com` | unreachable |
+
+`apt-get` cannot work (deb.debian.org unreachable), and no engine SDK can be downloaded.
+
+### 2.3 Proven working here
+
+- **TypeScript** — installed from npm, compiled a strict-mode probe with `tsc 7.0.2`, ran it on Node.
+- **Python** — venv + `pygame-ce 2.5.8` (SDL 2.32.10), created a 320×240 dummy surface.
+- **npm availability** — `phaser 4.2.1`, `pixi.js 8.22.0`, `electron 44.7.0`.
+
+### 2.4 Consequences you need to accept
+
+1. **No iOS build is possible on any Linux machine.** Apple requires macOS + Xcode. You need a Mac
+   or a `macos-latest` CI runner. Not a sandbox limitation — a platform rule.
+2. **No Android build here** — needs JDK + Android SDK + NDK; absent and unreachable.
+3. **No engine SDK can be installed here.** I cannot compile or run Unity, Godot, Unreal, Flutter,
+   .NET, or Rust code in this workspace.
+4. **No GPU, no display.** Only headless rendering.
+
+> **This is the direct cost of choosing 3D.** The TypeScript + Phaser route was the only stack I
+> could have built and run for you in this environment. It is a 2D-only stack, so it is now off the
+> table. With 3D chosen, my role becomes: writing and reviewing C# gameplay code, shaders, editor
+> tooling, and CI config — while the editor and all builds run on your machine.
+
+---
+
+## 3. The full language survey
+
+Legend: ✅ mature · ⚠️ caveats · ❌ unsupported
+
+### Viable for a **3D** game on all five platforms
+
+| Language | Engine | Win | Lin | mac | iOS | And | Cost / license | Verdict for CarTrack |
+|---|---|---|---|---|---|---|---|---|
+| **C#** | **Unity 6 (URP)** | ✅ | ✅ | ✅ | ✅ | ✅ | Proprietary; free < $200K revenue | **Recommended.** §5 |
+| GDScript | Godot 4.7.2 | ✅ | ✅ | ✅ | ✅ | ✅ | MIT — free, no royalty | **Strong runner-up.** §5.2 |
+| **C#** | **Godot 4.7.2 (.NET)** | ✅ | ✅ | ✅ | ✅ | ✅ | MIT | Runner-up, if you prefer C# + MIT. No web export. |
+| C++ / Blueprints | Unreal Engine 5 | ✅ | ✅ | ✅ | ✅ | ✅ | Free to $1M, then 5% royalty | Only if desktop/console fidelity beats mobile reach. §5.3 |
+| Rust | Bevy v0.20.0 | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | MIT / Apache-2 | ECS is elegant; no editor, mobile rough. Hobby-grade risk for this scope. |
+| C++ | raylib / SDL3 | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | zlib | You write the renderer, asset pipeline, and editor. Months of work before you have a game. |
+| C# | MonoGame / FNA | ✅ | ✅ | ✅ | ✅ | ✅ | MIT | Full Linux support (unlike MAUI), but 3D is low-level and you build everything. |
+| C++ | Custom + OpenGL/Vulkan | ✅ | ✅ | ✅ | ✅ | ✅ | yours | What Gameloft did. Only sane for a funded engine team. |
+
+### Eliminated by the 3D requirement
+
+| Language | Stack | Why eliminated |
+|---|---|---|
+| TypeScript | Phaser 4, PixiJS 8 | 2D-only renderers. *(Was the only stack buildable in this sandbox.)* |
+| Dart | Flutter + Flame | 2D engine; `flame_3d` is experimental |
+| Lua | Defold | 2D-focused |
+| GML | GameMaker | 2D, minimal 3D |
+| TS/JS | Cocos Creator | Weak Linux support, and Linux is in your matrix |
+| Java / Kotlin | libGDX | 3D is functional but a long way behind Unity for this genre |
+| C# | Avalonia | UI framework, not a 3D game engine |
+
+### Eliminated regardless of dimension
+
+| Language | Stack | Why eliminated |
+|---|---|---|
+| C# | **.NET MAUI** | **No Linux support and no browser target.** Microsoft states Linux is "not planned." Linux is required, so MAUI is disqualified outright. |
+| C# | Xamarin | Superseded by MAUI |
+| Python | pygame-ce | No iOS, no Android |
+| Python | Kivy | Not suited to 3D racing performance |
+| C++ / Python | Qt / QML | Not game-oriented; LGPL relinking friction for a closed-source product |
+| Swift | SpriteKit / SceneKit | Apple platforms only |
+| Kotlin | Android native | Android only |
+
+---
+
+## 4. Current engine versions (checked against `api.github.com`)
+
+| Engine | Version | Verified how |
+|---|---|---|
+| Godot | **4.7.2-stable** (2026-08-18) | `gh api repos/godotengine/godot/releases/latest` |
+| Bevy | **v0.20.0** (2026-10-08) | `gh api repos/bevyengine/bevy/releases/latest` |
+| Unity | Unity 6.x (6.4 cited in Aug 2026 comparisons) | secondary sources — **check unity.com for the current LTS** |
+| Unreal | Unreal Engine 5.x | secondary sources — **check the launcher** |
+
+Note: some comparison articles still cite "Godot 4.6.2" as latest. The GitHub API is authoritative
+here and returns 4.7.2-stable.
+
+---
+
+## 5. Recommendation
+
+### 5.1 Primary — **Unity 6 + C# on the Universal Render Pipeline**
+
+For a **3D, mobile-first arcade racer**, Unity is the right call. In order of weight:
+
+1. **URP was designed for mobile 3D.** This genre lives or dies on holding 60 fps on mid-range
+   Android, and URP's mobile variants, shader stripping, and texture-compression pipeline are the
+   most battle-tested available.
+2. **VFX throughput.** An Asphalt-style game is nitro plumes, tyre smoke, sparks, debris, speed
+   lines. Published 2026 benchmarks put Unity ~37% ahead of Godot at 100K particles (52 vs 38 fps)
+   and ~39% ahead on shadow-heavy scenes (61 vs 44 fps at 1024 lights). That gap lands exactly on
+   the effects this genre depends on.
+3. **The asset store is the real argument.** CarTrack's cost is dominated by 3D art — car models,
+   city kits, road props, VFX, sound. Unity's store has thousands of production-quality car meshes
+   and arcade vehicle controllers. Godot's library is far smaller.
+4. **Assets import cleanly — into Unity.** FBX/GLB files bought for Unity lose their materials when
+   imported into Godot, because Unity's Standard/URP/HDRP shaders have no Godot equivalent; meshes
+   arrive with no shader assigned and skeletons need re-validation. If you buy assets, this is real
+   recurring cost.
+5. **Profiling.** Unity's Profiler and Frame Debugger are mature. Godot's 3D profiling is usable but
+   less developed, and hitting the same frame target takes more manual tuning.
+6. **Monetisation SDKs** — if you go free-to-play with ads/IAP, Unity's integrations are the most
+   mature on mobile.
+7. **Closed source is fully compatible.** Unity never asks for your source.
+
+**What you pay for it:**
+
+| Cost | Detail |
 |---|---|
-| `registry.npmjs.org` | HTTP 200 — reachable |
-| `pypi.org` | HTTP 200 — reachable |
-| `api.github.com` | HTTP 200 — reachable |
-| `flutter.dev` | unreachable |
-| `dotnet.microsoft.com` | unreachable |
-| `static.rust-lang.org` | unreachable |
-| `deb.debian.org` | unreachable (so `apt-get install` cannot work) |
-| `objects.githubusercontent.com` | unreachable (so engine release binaries cannot be downloaded) |
+| Money | Free under $200K revenue; paid seats above (Pro cited at ~$2,310/yr per seat in 2026) |
+| License risk | Proprietary EULA that Unity has changed before — the 2023 runtime-fee episode is the cautionary tale |
+| Build size | An empty Unity project exports at ~80 MB (IL2CPP) to ~200 MB (Mono+URP) vs Godot's ~30 MB. Matters for mobile download conversion. |
+| Iteration | Editor cold start ~9.2 s vs Godot's ~1.4 s |
+| Lock-in | Moving off Unity later means a rewrite |
 
-### 1.3 Proven working in this sandbox
+### 5.2 Runner-up — **Godot 4.7.2** (GDScript or C#/.NET)
 
-- **TypeScript**: installed `typescript` from npm, compiled a strict-mode probe with
-  `tsc 7.0.2`, and ran it under Node. End-to-end verified.
-- **Python**: created a venv, installed `pygame-ce 2.5.8` (bundles SDL 2.32.10), and created a
-  320×240 dummy surface. Import and surface creation verified.
-- **npm package availability**: `phaser 4.2.1`, `pixi.js 8.22.0`, `electron 44.7.0`.
+Pick this if **license risk is a dealbreaker**. MIT means no fees, no royalties, no revenue
+threshold, and no EULA a vendor can change under you — permanently.
 
-### 1.4 What this sandbox CANNOT do — read this before choosing
+Godot 4's 3D is genuinely capable: Vulkan Forward+/Mobile/Compatibility renderers, PBR, SDFGI,
+volumetric fog, HDR in 4.7. It handles stylised and mid-scope 3D well, and it wins decisively on
+build size (~30 MB vs 80–200 MB) and iteration speed.
 
-1. **It cannot produce an iOS build. Ever.** Apple requires macOS + Xcode. This is a hard
-   platform rule, not a sandbox limitation. You will need a Mac or a CI macOS runner
-   (e.g. GitHub Actions `macos-latest`).
-2. **It cannot produce an Android build as-is.** That needs a JDK + Android SDK + NDK; none are
-   installed and `apt`/`dl.google.com` are unreachable.
-3. **It cannot install Godot, Flutter, .NET, Rust, or Java SDKs**, because their download hosts
-   are unreachable. I can write and review code in all of them; I cannot compile or run it here.
-4. **No GPU / no display.** Only headless (`dummy`) rendering. Real visual verification has to
-   happen on your machine.
+What you accept: roughly 12–26% lower frame rates than URP on complex scenes, less mature mobile
+3D tooling and profiling, a much smaller asset ecosystem, asset-import material loss, and no
+official console export. For a solo developer who values zero license exposure over raw capability,
+this is a legitimate and defensible choice.
 
-**Practical consequence:** a **TypeScript** or **Python** core is the only choice I can build,
-run, and test for you in this environment today. Everything else I can author and review, but
-verification shifts to you / CI.
+### 5.3 Not recommended here — **Unreal Engine 5**
+
+Unreal's headline features — **Lumen and Nanite — are not available on mobile**. So on the two
+platforms that matter most for an Asphalt-style game you lose the reason to pick Unreal, while
+still paying for it in build size, battery drain, and a steeper C++ learning curve. Add the 5%
+royalty above $1M lifetime gross and quarterly reporting. Choose Unreal only if desktop/console
+visual fidelity outranks mobile reach.
+
+### 5.4 Decision summary
+
+| If your priority is… | Choose |
+|---|---|
+| Shipping a 3D mobile racer with the least friction | **Unity 6 + C# + URP** |
+| Zero license fees and zero EULA risk, forever | **Godot 4.7.2 + C#** |
+| Maximum desktop/console visual fidelity | Unreal 5 + C++ |
+| Having me build and test it in this sandbox | *No longer possible at 3D — see §2.4* |
 
 ---
 
-## 2. All suitable languages, with honest platform coverage
+## 6. Proposed Unity stack and architecture
 
-Legend: ✅ official & mature · ⚠️ works with caveats · ❌ not supported
+### 6.1 Packages
 
-### Tier 1 — purpose-built game engines
-
-| Language | Engine | Win | Linux | mac | iOS | Android | Cost / license | Best when |
-|---|---|---|---|---|---|---|---|---|
-| **GDScript** | **Godot 4.7** | ✅ | ✅ | ✅ | ✅ | ✅ | MIT — free forever, no royalty | 2D or mid-tier 3D, solo/small team. **Top pick.** |
-| **C#** | **Godot 4.7 (.NET build)** | ✅ | ✅ | ✅ | ✅ | ✅ | MIT | Same as above but you prefer C#. Note: C# cannot export to web. |
-| **C#** | **Unity 6** | ✅ | ✅ | ✅ | ✅ | ✅ | Proprietary. Free under $200K revenue; paid seats above | 3D, mobile-first, ads/IAP SDKs, console, XR |
-| **C++** (+Blueprints) | **Unreal Engine 5** | ✅ | ✅ | ✅ | ✅ | ✅ | Free until $1M, then 5% royalty | AAA-fidelity 3D |
-| **Lua** | **Defold** | ✅ | ✅ | ✅ | ✅ | ✅ | Free | Tiny mobile builds, 2D, fast iteration |
-| **TS/JS** | **Cocos Creator** | ✅ | ⚠️ | ✅ | ✅ | ✅ | Free | Casual mobile/web, big in Asia |
-| **GML** | **GameMaker** | ✅ | ✅ | ✅ | ✅ | ✅ | Free non-commercial; Pro ~$99.99 once | 2D pixel-art games |
-
-### Tier 2 — code-first frameworks (no visual editor)
-
-| Language | Framework | Win | Linux | mac | iOS | Android | Cost / license | Notes |
-|---|---|---|---|---|---|---|---|---|
-| **TypeScript** | **Phaser 4** + Capacitor + Electron/Tauri | ✅ | ✅ | ✅ | ✅ | ✅ | MIT | **Buildable & testable in this sandbox.** Web build is free extra reach. |
-| **TypeScript** | **PixiJS 8** (custom engine) | ✅ | ✅ | ✅ | ✅ | ✅ | MIT | Maximum control, more work |
-| **Dart** | **Flutter + Flame** | ✅ | ✅ | ✅ | ✅ | ✅ | BSD-3 / MIT | **2D only** (`flame_3d` is experimental) |
-| **Rust** | **Bevy** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | MIT/Apache-2 | ECS, modern; no editor, mobile still rougher |
-| **C++** | **raylib** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | zlib | Simple, learnable, all 5 targets |
-| **C/C++** | **SDL3** / **SFML** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | zlib / zlib | You build the engine yourself |
-| **C#** | **MonoGame** / **FNA** | ✅ | ✅ | ✅ | ✅ | ✅ | MIT | Stardew Valley's stack. Full Linux support. |
-| **C#** | **Avalonia** (+ game lib) | ✅ | ✅ | ✅ | ✅ | ✅ | MIT | Skia rendering; UI-first, not game-first |
-| **Kotlin** | **KorGE** / **libGDX** | ✅ | ✅ | ✅ | ✅ | ✅ | Apache-2 / LGPL | libGDX is Java/Kotlin, proven on mobile |
-| **Java** | **libGDX** | ✅ | ✅ | ✅ | ✅ | ✅ | Apache-2 | Mature, less trendy |
-| **Python** | **Kivy** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ | MIT | Works, but slow and heavy for real games |
-| **Python** | **pygame-ce** | ✅ | ✅ | ✅ | ❌ | ❌ | LGPL | Fine for prototypes. **Not viable for iOS/Android.** |
-
-### Tier 3 — do not use for this
-
-| Language | Framework | Why it is out |
+| Concern | Choice | Why |
 |---|---|---|
-| **C#** | **.NET MAUI** | **Does not support Linux, and does not support browser.** Microsoft has said Linux is "not planned". Verified across multiple 2026 sources. Since Linux is in your matrix, MAUI is disqualified. |
-| **C#** | **Xamarin** | Superseded by MAUI; effectively dead-end |
-| **C++/Python** | **Qt / QML** | Not game-oriented, and LGPL obligations (dynamic linking, user relinking) create friction for a closed-source product unless you buy a commercial license |
-| **Swift** | SpriteKit / **Kotlin** native | Single-vendor: covers Apple *or* Android, never all five |
-| **HTML/JS** | plain DOM/Canvas | No game loop, no fixed timestep, poor mobile performance |
+| Render pipeline | **URP** | Mobile-first, scalable quality tiers |
+| Language | **C#** | Unity's primary; IL2CPP for mobile |
+| Input | **Input System** + Input Actions assets | One action map → keyboard, gamepad, touch, tilt |
+| Camera | **Cinemachine** | Chase camera, shake on impact, nitro FOV punch |
+| UI | **UI Toolkit** or **uGUI + TextMeshPro** | Menus, HUD, speedo, touch controls |
+| Asset streaming | **Addressables** | Car/track bundles, patchable content |
+| Localisation | **Localization package** | Strings + asset variants from day one |
+| Post-processing | **URP Volume** | Bloom, motion blur, chromatic aberration, vignette, colour grading |
+| Analytics | Unity Analytics | Retention and funnel |
+| Monetisation | Unity IAP + ad mediation | Only if free-to-play |
 
----
+### 6.2 Car handling — the most important technical decision
 
-## 3. Recommendation
+Do **not** use Unity's `WheelCollider` for an Asphalt-style game. It simulates real tyres and feels
+wrong for arcade handling — it fights you on drifts, jumps, and mid-air control.
 
-### Primary: **Godot 4.7 + GDScript**
+Instead: a **custom arcade controller** —
+- raycast suspension (4 rays, spring/damper per corner)
+- scripted acceleration/braking curves per car class, not engine simulation
+- lateral grip as a tunable curve, not a friction model
+- explicit drift, air-control, and nitro-boost states in a state machine
+- landing detection with squash/stretch and camera shake
 
-Why, in order of weight for *this* project:
+This is what gives you the "feels good immediately, tunable forever" behaviour the genre needs.
 
-1. **License fit.** MIT. No fees, no royalties, no revenue threshold, no EULA that a vendor can
-   change under you. You can ship CarTrack closed-source with zero obligations. This matters more
-   than usual given your licensing stance — Unity and Unreal both impose ongoing commercial terms.
-2. **Real five-platform coverage** from one project, plus a free web export.
-3. **Dedicated 2D pipeline.** Godot's 2D is a first-class engine, not 3D-space sprites.
-4. **Tiny builds** (roughly 25 MB Android / 28 MB iOS for a simple 2D game vs Unity's ~35/40 MB)
-   and lower mobile memory use.
-5. **Git-friendly**: scenes are text `.tscn`, resources are `.tres`. Clean diffs and reviews.
-6. **Fast iteration**: ~0.3 s script hot-reload.
-
-Costs you accept: no official console export (third-party porters only, $10K+), a smaller asset
-store than Unity, weaker 3D at the AAA end, and less mature mobile ads/IAP integrations.
-
-### Secondary, pick one of these if…
-
-- **…you want console, XR, or heavy mobile monetisation SDKs** → **Unity 6 + C#**.
-- **…you want AAA-fidelity 3D** → **Unreal 5 + C++**.
-- **…you want me to build and run it *here*, right now, with real verification** →
-  **TypeScript + Phaser 4**, then Capacitor for iOS/Android and Tauri/Electron for desktop.
-  This is the only tier-1-tier-2 option I can compile, run, and test in this sandbox.
-- **…you already know C# and want Godot's licensing** → **Godot 4.7 C#/.NET**.
-- **…you want to write the engine and own every layer** → **Rust + Bevy** or **C++ + raylib**.
-
----
-
-## 4. Proposed architecture (stack-agnostic)
-
-Whatever engine wins, keep game logic separable from the platform shell. That is what makes five
-platforms maintainable.
+### 6.3 Repository layout
 
 ```
 CarTrack/
-├── LICENSE                 # proprietary, already in place
-├── README.md
-├── docs/
-│   └── PLAN.md             # this file
-├── src/
-│   ├── core/               # platform-independent: rules, state machines, math, scoring
-│   │                       # NO engine/rendering imports in here → unit-testable headless
-│   ├── game/               # entities, systems, level data, physics tuning
-│   ├── ui/                 # menus, HUD, settings, localisation
-│   └── platform/           # thin adapters: input, save game, audio, haptics, store/IAP
-├── assets/                 # art, audio, fonts — tracked or LFS per repo convention
-├── build/                  # per-target export config + CI scripts
-└── tests/                  # headless tests for core/ — run on every push
+├── LICENSE, README.md, docs/
+├── Assets/
+│   ├── _Project/            # everything we author — keep third-party separate
+│   │   ├── Scripts/
+│   │   │   ├── Core/        # pure C#, no UnityEngine → unit-testable headless
+│   │   │   ├── Vehicles/    # arcade controller, suspension, nitro, damage
+│   │   │   ├── Race/        # race director, laps, positions, checkpoints
+│   │   │   ├── AI/          # traffic + rival drivers
+│   │   │   ├── Camera/      # chase cam, shake, FOV punch
+│   │   │   └── UI/
+│   │   ├── Prefabs/ Scenes/ Shaders/ ScriptableObjects/ Input/
+│   ├── Art/                 # or Git LFS / separate asset repo
+│   └── Plugins/             # third-party, versioned separately
+├── Packages/manifest.json
+├── ProjectSettings/
+├── Builds/                  # per-target build scripts
+└── .github/workflows/       # CI
 ```
 
-Rules that pay for themselves:
-- **Fixed-timestep simulation** (e.g. 60 Hz) with render interpolation — keeps behaviour identical
-  on a 144 Hz desktop and a 30 fps phone.
-- **Core has no rendering dependency** → tests run headless in CI, including in this sandbox.
-- **Input is an abstraction**: gamepad + keyboard on desktop, touch + gyro on mobile, all mapping
-  to the same action names.
-- **Save data is versioned JSON** in the platform's app-data directory.
-- **No hardcoded resolution** — design to a virtual resolution and letterbox/scale.
-- **Localisation from day one**, even with only `en`.
+Rules: `Core/` has no `UnityEngine` imports so it can be tested headless; fixed-timestep physics
+with render interpolation; no hardcoded resolution (virtual resolution + letterbox); versioned JSON
+saves in the platform app-data directory.
+
+### 6.4 Per-platform build matrix
+
+| Target | Backend | Signing | Build machine |
+|---|---|---|---|
+| Windows x64 | IL2CPP | optional cert | any |
+| Linux x64 | IL2CPP | none | any |
+| macOS (arm64 + x64) | IL2CPP, universal | Apple Developer ID | **macOS only** |
+| iOS | IL2CPP, ARM64, ASTC | Apple Developer Program | **macOS only** |
+| Android | IL2CPP, ARM64 (required), ASTC/ETC2 | Play App Signing | Linux or macOS |
+
+**CI:** `game-ci/unity-builder` GitHub Action, or Unity Cloud Build. Note that CI needs a Unity
+license (Personal works but requires activation flow). Linux runner for Win/Linux/Android on every
+push; macOS runner for macOS/iOS on tags only — macOS minutes are billed at 10×.
 
 ---
 
-## 5. Milestone roadmap
+## 7. Roadmap — vertical slice first
+
+Asphalt has 180+ cars and a studio behind it. Target a **vertical slice** that proves the feel
+before adding volume.
 
 | # | Milestone | Deliverable | Exit criteria |
 |---|---|---|---|
-| 0 | Decide the stack | §8 answered | One engine chosen, toolchains installed |
-| 1 | Skeleton | Repo structure, CI, one moving sprite on desktop | Runs on Win/mac/Linux; `core/` tests green |
-| 2 | Core loop | Drive/track mechanics, scoring, win/lose | Playable end-to-end, no menus |
-| 3 | Content | 3 levels or tracks, art pass, audio | 10 min of content, no placeholders |
-| 4 | Mobile port | Touch input, screen scaling, Android build | Playable on a physical Android phone |
-| 5 | iOS port | Xcode project, provisioning, TestFlight | Playable via TestFlight |
-| 6 | Polish | Settings, save/load, localisation, accessibility | Feature-complete |
-| 7 | Release | Store listings, icons, screenshots, builds | Shipped to Steam + Play + App Store |
+| 0 | Setup | Unity 6 LTS, URP, repo, `.gitignore`, CI, LFS decision | Empty project builds for Win/Linux |
+| 1 | **Car feel** | 1 car, 1 flat test track, arcade controller | Driving feels good with a keyboard. **Do not proceed until it does.** |
+| 2 | Camera + juice | Chase cam, shake, nitro VFX, speed lines, motion blur | 30-second clip you would watch twice |
+| 3 | Race loop | Laps, checkpoints, positions, countdown, results | Win/lose a full race |
+| 4 | One real track | 1 designed city circuit, traffic, jumps, ramps | Playable start to finish |
+| 5 | Android port | Touch controls, quality tiers, ASTC, ARM64 | 60 fps on a mid-range physical phone |
+| 6 | iOS port | Xcode, provisioning, TestFlight | Playable via TestFlight |
+| 7 | Desktop polish | Settings, save/load, controller support, localisation | Feature-complete |
+| 8 | Release | Store pages, icons, screenshots, trailers | Shipped |
 
-Rough effort: M0–M3 is the bulk of the design work; **M5 is the one most teams underestimate**,
-because it is blocked on Apple accounts and hardware, not on code.
-
----
-
-## 6. Build & release matrix
-
-| Target | Toolchain | Signing | Where it can be built |
-|---|---|---|---|
-| Windows | engine export / Electron / Tauri | optional code-signing cert | anywhere |
-| Linux | engine export / AppImage / Flatpak | none required | anywhere |
-| macOS | engine export, notarisation | Apple Developer ID ($99/yr) | **macOS only** |
-| iOS | Xcode export | Apple Developer Program ($99/yr) | **macOS only** |
-| Android | Gradle / engine export | Play App Signing | Linux or macOS (needs JDK + Android SDK) |
-
-**Recommended CI** (GitHub Actions):
-- `linux-latest` → build Linux + Windows, run headless `core/` tests on every push.
-- `macos-latest` → build macOS + iOS, on tags or manual dispatch (macOS minutes are 10× billed).
-- Android → `linux-latest` with `android-actions/setup-android`.
+**Milestone 1 is the whole game.** If the car does not feel good, nothing after it matters. Budget
+the most time there and resist adding content until it is right.
 
 ---
 
-## 7. Closed-source licensing notes
+## 8. Asset strategy (the real cost)
 
-CarTrack is All Rights Reserved. All recommended options are compatible, but the obligations
-differ:
+For a 3D racer, art dominates effort and budget. Plan it explicitly.
 
-| Engine | Your obligations when shipping closed source |
-|---|---|
-| Godot (MIT) | **None.** Keep the copyright notice in `LICENSE.md` of the export. No fees at any revenue. |
-| Unity 6 | Proprietary EULA; free below $200K revenue, paid seats above; terms can change vendor-side |
-| Unreal 5 | Free until $1M lifetime gross per product, then **5% royalty** + quarterly reporting |
-| Defold | Free; permissive |
-| Phaser / PixiJS (MIT) | None beyond attribution |
-| Flutter/Flame (BSD-3) | Attribution |
-| MonoGame (MIT), libGDX (Apache-2), Bevy (MIT/Apache-2), raylib (zlib) | Attribution |
-| Qt | LGPL → must allow user relinking, or buy a commercial licence. Friction for closed source. |
-| pygame-ce | LGPL → same relinking consideration, and no iOS/Android anyway |
+| Source | Cost | Notes |
+|---|---|---|
+| Unity Asset Store | $0–$200 per car / environment kit | Fastest path. Check each licence for redistribution and "AI training" clauses. |
+| Quaternius, Kenney, Poly Haven | Free (CC0 / CC-BY) | Stylised low-poly; good for prototyping |
+| Blender + your own modelling | Your time | Total control, highest cost |
+| Outsourced | $ | Only once the art direction is locked |
 
-Also note: **your game being closed source does not exempt you from third-party asset licences.**
-Any font, sprite, or sound you pull in carries its own terms — track those in a
-`docs/THIRD_PARTY.md` from the first asset you add.
-
----
-
-## 8. Decisions needed before coding starts
-
-1. **2D or 3D?** (2D → Godot/Phaser/Defold are all strong. 3D → Godot or Unity. AAA 3D → Unreal.)
-2. **What is the game?** "CarTrack" reads as either an arcade racer, a traffic/dodging game, or a
-   vehicle-tracking sim. The genre drives physics needs, art volume, and whether you need a
-   tilemap or a 3D world.
-3. **What languages do you (or your team) already know?** This outweighs most technical
-   differences. A stack you can debug at 2 a.m. beats a marginally better one.
-4. **Do you want me to build and verify it in this sandbox?** If yes → TypeScript/Phaser or
-   Python. If no → Godot is the better long-term choice and you run the editor locally.
-5. **Offline single-player, or online?** Multiplayer adds networking, servers, and anti-cheat,
-   and changes the engine ranking (Godot's built-in netcode is basic).
-6. **Monetisation?** Free, paid, or free-with-ads/IAP. Ads/IAP SDKs are where Unity is clearly
-   ahead on mobile.
-7. **Console in scope later?** If yes, Godot drops in ranking — it needs a third-party porter.
+**Track every third-party asset in `docs/THIRD_PARTY.md` from the first one you add.** Your game
+being closed source does not exempt you from asset licences, and a missing attribution is a real
+legal exposure at ship time.
 
 ---
 
@@ -261,9 +325,25 @@ Any font, sprite, or sound you pull in carries its own terms — track those in 
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| No Mac available | **Blocks all iOS and macOS shipping** | Confirm access now; else budget a macOS CI runner |
-| Scope creep on 3D | Weeks→months | Start 2D; add 3D only if the design demands it |
-| Engine chosen before genre is fixed | Rework | Answer §8.1–8.2 first |
-| Third-party asset licences | Legal exposure for a closed-source product | Log every asset in `docs/THIRD_PARTY.md` |
-| Mobile performance discovered late | Rewrite of render path | Port to a physical phone at milestone 4, not 7 |
-| Unity EULA / Unreal royalty changes | Cost at scale | Godot avoids this entirely |
+| **No Mac available** | Blocks all iOS *and* macOS shipping | Confirm access now, or budget a macOS CI runner |
+| **Scope** | An Asphalt-scale game is a studio-sized project | Vertical slice first (§7); 1 car, 1 track |
+| **Car feel unsolved late** | Unfixable without a rewrite | Milestone 1 gates everything else |
+| **Mobile perf found late** | Render-path rewrite | Port to a physical mid-range phone at M5, not M8 |
+| **Unity EULA changes** | Cost at scale | Accept, or choose Godot (§5.2) |
+| **Build size** | Poor store conversion | IL2CPP + ASTC + Addressables; strip unused shaders |
+| **Asset licences** | Legal exposure | `docs/THIRD_PARTY.md` from asset #1 |
+| **I cannot compile Unity code here** | Slower feedback loop | You run the editor; I write/review C#, shaders, CI |
+
+---
+
+## 10. Decisions still needed
+
+1. **Unity or Godot?** — the recommendation is Unity (§5.1); Godot if license risk outweighs it (§5.2).
+2. **What languages do you already know?** You selected "advise me" without saying. If C# is
+   unfamiliar but GDScript/C++/TS is not, that can flip the recommendation.
+3. **Do you have a Mac?** Yes/no determines whether iOS and macOS ship at all.
+4. **Solo or team?** Changes the roadmap, not the stack.
+5. **Art plan** — buy from the Asset Store, use free CC0 packs, or model your own?
+6. **Business model** — paid, free, or free-with-ads/IAP? Ads/IAP is where Unity is furthest ahead.
+7. **Online multiplayer later?** Adds networking, servers, and anti-cheat; both engines cope, but
+   it should be known before the architecture is set.
