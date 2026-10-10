@@ -15,7 +15,14 @@ License posture: **proprietary / closed source, All Rights Reserved** (see `LICE
 | Genre | **"Something like Asphalt"** — arcade 3D street racing | you |
 | Platforms | Windows, Linux, macOS, iOS, Android | you |
 | Licensing | Closed source, All Rights Reserved | you, and `LICENSE` |
-| Stack | **Recommended below — Unity 6 + C# (URP)** | §5 |
+| Team size | **Solo** | you |
+| Mac access | **None** — iOS/macOS must be built via cloud macOS CI (§7) | you |
+| Stack | **Unity 6 + C# (URP)** recommended, **Godot 4.7.2** close runner-up | [`ENGINE_COMPARISON.md`](ENGINE_COMPARISON.md) |
+
+> **Full comparison:** the engine choice is scored and argued in
+> [`docs/ENGINE_COMPARISON.md`](ENGINE_COMPARISON.md). §5 below is the summary. Under a
+> ship-oriented weighting Unity scores 4.05/5 against Godot's 3.50; under a licence-risk weighting
+> they are a dead heat at 3.70 vs 3.73. Read that document before committing.
 
 ### A note on "like Asphalt"
 
@@ -68,8 +75,11 @@ Host: `Linux 6.1.158+ x86_64`, Debian 12 container.
 
 ### 2.4 Consequences you need to accept
 
-1. **No iOS build is possible on any Linux machine.** Apple requires macOS + Xcode. You need a Mac
-   or a `macos-latest` CI runner. Not a sandbox limitation — a platform rule.
+1. **No iOS build is possible on any Linux machine.** Apple requires macOS + Xcode. You have no
+   Mac, so iOS and macOS builds must go through a **cloud macOS runner** — GitHub Actions
+   `macos-latest` (free on public repos), Codemagic, or Xcode Cloud. Cost and setup detail in
+   [`ENGINE_COMPARISON.md`](ENGINE_COMPARISON.md) §7. The $99/yr Apple Developer Program is
+   unavoidable regardless of route.
 2. **No Android build here** — needs JDK + Android SDK + NDK; absent and unreachable.
 3. **No engine SDK can be installed here.** I cannot compile or run Unity, Godot, Unreal, Flutter,
    .NET, or Rust code in this workspace.
@@ -336,14 +346,29 @@ legal exposure at ship time.
 
 ---
 
-## 10. Decisions still needed
+## 10. Decisions
 
-1. **Unity or Godot?** — the recommendation is Unity (§5.1); Godot if license risk outweighs it (§5.2).
-2. **What languages do you already know?** You selected "advise me" without saying. If C# is
-   unfamiliar but GDScript/C++/TS is not, that can flip the recommendation.
-3. **Do you have a Mac?** Yes/no determines whether iOS and macOS ship at all.
-4. **Solo or team?** Changes the roadmap, not the stack.
-5. **Art plan** — buy from the Asset Store, use free CC0 packs, or model your own?
-6. **Business model** — paid, free, or free-with-ads/IAP? Ads/IAP is where Unity is furthest ahead.
-7. **Online multiplayer later?** Adds networking, servers, and anti-cheat; both engines cope, but
-   it should be known before the architecture is set.
+### Settled
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | 2D or 3D? | 3D |
+| 2 | Genre | Asphalt-style arcade street racer |
+| 3 | Team size | Solo |
+| 4 | Mac access | None — cloud macOS CI is the route |
+
+### Still open
+
+1. **Unity or Godot?** Read [`ENGINE_COMPARISON.md`](ENGINE_COMPARISON.md) §9. The deciding
+   question: if Unity announced another Runtime-Fee-style change in 2028 after a year of your work
+   was in it, would you be annoyed, or would you stop? Annoyed → Unity. Stop → Godot.
+2. **Language.** Deliberately not shared. See `ENGINE_COMPARISON.md` §4 — GDScript is the fastest
+   ramp-up, C# is the better ecosystem, C++/Rust are the wrong trade for a solo first 3D game.
+3. **Art plan.** Asset Store, free CC0 packs, or model your own? This is the dominant cost for a
+   3D racer and it interacts with the engine choice (§6.8 of the comparison).
+4. **Business model.** Paid, free, or free-with-ads/IAP. Ads/IAP is where Unity leads furthest.
+5. **Online multiplayer later?** Adds networking, servers, and anti-cheat. Worth knowing before
+   the architecture is fixed.
+6. **Repository visibility.** Currently **public** (verified: `"private": false`), so your source
+   is readable while `LICENSE` grants no rights to use it. Public also gets you free macOS CI
+   minutes; private costs money after ~200/month. Decide deliberately — see comparison §7.
