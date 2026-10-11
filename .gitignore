@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.vite/
+
+# Native shells (added when the Capacitor/Electron wrappers land)
+android/
+ios/
+release/
+
+# Unity / Godot, if the engine decision ever changes
+Library/
+Temp/
+Logs/
+.godot/
