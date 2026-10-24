@@ -1,0 +1,58 @@
+name: CI
+
+# Gates every push and pull request. The OS matrix is the point: CarTrack claims
+# five platforms, so the toolchain is proved on three of them on every commit
+# rather than discovered to be broken at release time.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck, test, build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint workflows
+        run: npm run lint:workflows
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Only the Linux leg uploads, so three identical bundles are not produced.
+      - name: Upload web build
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cartrack-web
+          path: dist
+          if-no-files-found: error
+          retention-days: 14

@@ -14,3 +14,6 @@ Library/
 Temp/
 Logs/
 .godot/
+
+# Release bundles
+*.zip
