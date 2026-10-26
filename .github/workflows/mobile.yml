@@ -2,14 +2,20 @@ name: Mobile
 
 # Builds the Android APK and an unsigned iOS simulator build through Capacitor.
 #
-# WHY THIS IS MANUAL-TRIGGER ONLY
-# -------------------------------
-# The native shells (android/, ios/) are NOT committed to this repository yet,
-# and could not be generated in the environment where this file was written:
-# the Android SDK host (dl.google.com) and the CocoaPods CDN are unreachable
-# there, and iOS needs macOS + Xcode. So this workflow bootstraps the shells on
-# the runner instead. It is `workflow_dispatch` so it cannot turn CI red while
-# that bootstrap is still unproven.
+# WHY THE NATIVE SHELLS ARE GENERATED AT RUNTIME
+# ----------------------------------------------
+# android/ and ios/ are NOT committed to this repository, and could not be
+# generated in the environment where this file was written: the Android SDK host
+# (dl.google.com) and the CocoaPods CDN are unreachable there, and iOS needs
+# macOS + Xcode. So this workflow bootstraps the shells on the runner instead,
+# where those hosts are reachable.
+#
+# WHY IT ALSO TRIGGERS ON pull_request
+# ------------------------------------
+# `workflow_dispatch` only works once the workflow file exists on the default
+# branch -- GitHub 404s on the dispatch endpoint until then. `pull_request`
+# workflows are resolved from the PR HEAD branch instead, so that trigger is
+# what makes this executable from an unmerged branch. No merge to main required.
 #
 # WHAT THIS GIVES YOU
 # -------------------
@@ -30,6 +36,17 @@ on:
         type: choice
         default: both
         options: [android, ios, both]
+  # Also runs on pull requests. This is what makes the workflow executable at
+  # all while the branch is unmerged: GitHub resolves `pull_request` workflows
+  # from the PR HEAD branch, whereas `workflow_dispatch` requires the file to
+  # exist on the default branch and 404s otherwise. Scoped by path so ordinary
+  # pushes do not spend macOS minutes.
+  pull_request:
+    paths:
+      - ".github/workflows/mobile.yml"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
 
 permissions:
   contents: read
@@ -62,7 +79,10 @@ jobs:
 
   android:
     name: Android APK (debug)
-    if: inputs.target == 'android' || inputs.target == 'both'
+    # On a workflow_dispatch run, honour the chosen target. On any other event
+    # (pull_request) `inputs.target` is null, so without this first clause both
+    # jobs would silently skip and the run would report a misleading success.
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'android' || inputs.target == 'both'
     needs: web
     runs-on: ubuntu-latest
     steps:
@@ -123,7 +143,7 @@ jobs:
 
   ios:
     name: iOS simulator build (unsigned)
-    if: inputs.target == 'ios' || inputs.target == 'both'
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'ios' || inputs.target == 'both'
     needs: web
     runs-on: macos-latest
     steps:
