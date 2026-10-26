@@ -164,8 +164,14 @@ jobs:
 
       - name: Bootstrap Capacitor
         run: |
-          set -euo pipefail
+          set -uo pipefail
           npm install --no-save @capacitor/cli@^8 @capacitor/core@^8 @capacitor/ios@^8
+
+          echo "--- installed @capacitor packages ---"
+          ls -1 node_modules/@capacitor 2>/dev/null || echo "(none)"
+          echo "--- cap CLI version ---"
+          npx cap --version 2>&1 || echo "cap CLI unavailable"
+
           if [ ! -f capacitor.config.ts ] && [ ! -f capacitor.config.json ]; then
             cat > capacitor.config.json <<'JSON'
           {
@@ -175,9 +181,37 @@ jobs:
           }
           JSON
           fi
+          echo "--- capacitor config ---"
+          cat capacitor.config.json 2>/dev/null || cat capacitor.config.ts 2>/dev/null || echo "(NO CONFIG)"
+          echo "--- webDir (dist) ---"
+          ls -la dist 2>/dev/null | head -6 || echo "(dist MISSING)"
+
           if [ ! -d ios ]; then
-            npx cap add ios
+            echo "--- running: npx cap add ios ---"
+            npx cap add ios 2>&1 | tee /tmp/capadd.log
+            echo "cap add ios exit: ${PIPESTATUS[0]}"
+          else
+            echo "--- ios/ already present, skipping cap add ---"
           fi
+
+          echo "--- ios tree (depth 3) ---"
+          find ios -maxdepth 3 2>/dev/null | head -40 || echo "(NO ios DIRECTORY)"
+          echo "--- any Podfile anywhere ---"
+          find . -name Podfile -not -path "*/node_modules/*" 2>/dev/null || true
+
+          # Assert the precondition the next step depends on, and report the
+          # evidence through annotations since the log archive is unreadable.
+          if [ ! -f ios/App/Podfile ]; then
+            echo "::error title=bootstrap::ios/App/Podfile was not created by cap add ios"
+            tail -n 30 /tmp/capadd.log 2>/dev/null | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=cap add ios::${line}"
+            done
+            find ios -maxdepth 3 2>/dev/null | head -20 | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error title=ios tree::${line}"
+            done
+            exit 1
+          fi
+
           npx cap sync ios
 
       # Diagnostics exist because the runner's own logs may not be reachable
