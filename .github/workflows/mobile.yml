@@ -6,9 +6,16 @@ name: Mobile
 # ----------------------------------------------
 # android/ and ios/ are NOT committed to this repository, and could not be
 # generated in the environment where this file was written: the Android SDK host
-# (dl.google.com) and the CocoaPods CDN are unreachable there, and iOS needs
-# macOS + Xcode. So this workflow bootstraps the shells on the runner instead,
-# where those hosts are reachable.
+# (dl.google.com) is unreachable there, and iOS needs macOS + Xcode. So this
+# workflow bootstraps the shells on the runner instead, where both exist.
+#
+# IOS USES SWIFT PACKAGE MANAGER, NOT COCOAPODS
+# ---------------------------------------------
+# Since Capacitor 8 the iOS template resolves dependencies through SPM, which is
+# built into Xcode. `cap add ios` therefore creates ios/App/App.xcodeproj and a
+# generated ios/App/CapApp-SPM package -- and no Podfile and no App.xcworkspace,
+# since the workspace only ever existed as a CocoaPods artifact. That is why
+# there is no `pod install` step and why the build targets -project.
 #
 # WHY IT ALSO TRIGGERS ON pull_request
 # ------------------------------------
@@ -196,13 +203,15 @@ jobs:
 
           echo "--- ios tree (depth 3) ---"
           find ios -maxdepth 3 2>/dev/null | head -40 || echo "(NO ios DIRECTORY)"
-          echo "--- any Podfile anywhere ---"
-          find . -name Podfile -not -path "*/node_modules/*" 2>/dev/null || true
 
-          # Assert the precondition the next step depends on, and report the
-          # evidence through annotations since the log archive is unreadable.
-          if [ ! -f ios/App/Podfile ]; then
-            echo "::error title=bootstrap::ios/App/Podfile was not created by cap add ios"
+          # Capacitor 8 scaffolds iOS with Swift Package Manager, not
+          # CocoaPods: there is no Podfile and no App.xcworkspace, and
+          # plugin dependencies live in ios/App/CapApp-SPM instead. Assert on
+          # the Xcode project, which is what the build step actually needs, and
+          # report the evidence through annotations since the log archive is
+          # unreachable from here.
+          if [ ! -d ios/App/App.xcodeproj ]; then
+            echo "::error title=bootstrap::ios/App/App.xcodeproj was not created by cap add ios"
             tail -n 30 /tmp/capadd.log 2>/dev/null | while IFS= read -r line; do
               [ -n "$line" ] && echo "::error title=cap add ios::${line}"
             done
@@ -211,6 +220,9 @@ jobs:
             done
             exit 1
           fi
+
+          echo "--- SPM package manifest ---"
+          ls -la ios/App/CapApp-SPM 2>/dev/null || echo "(no CapApp-SPM directory)"
 
           npx cap sync ios
 
@@ -229,42 +241,24 @@ jobs:
           echo "brew:      $(brew --version 2>&1 | head -1 || echo absent)"
           echo "xcodebuild: $(xcodebuild -version 2>&1 | head -2 | tr '\n' ' ' || echo absent)"
 
-      # CocoaPods is not guaranteed to be preinstalled on the newest macOS
-      # runner images, and a missing `pod` is the most likely cause of a
-      # bare "exit code 1" from the install step.
-      - name: Ensure CocoaPods
-        run: |
-          set -euo pipefail
-          if ! command -v pod >/dev/null 2>&1; then
-            echo "pod not found on PATH - installing via Homebrew"
-            brew install cocoapods
-          fi
-          echo "Using CocoaPods $(pod --version)"
-
-      - name: Install pods
-        working-directory: ios/App
-        run: |
-          set -uo pipefail
-          # No --repo-update. It forces a full CDN spec-repo refresh, which is
-          # slow and a well-known source of CI flakiness; the runner's existing
-          # cache is sufficient for Capacitor's own pods.
-          if pod install 2>&1 | tee /tmp/pod.log; then
-            exit 0
-          fi
-          # Surface the failure where it can actually be read.
-          tail -n 30 /tmp/pod.log | while IFS= read -r line; do
-            [ -n "$line" ] && echo "::error title=pod install::${line}"
-          done
-          exit 1
+      # CocoaPods is deliberately absent here. Capacitor 8 resolves iOS
+      # dependencies through Swift Package Manager, which is built into Xcode,
+      # so there is no Podfile to install and no Ruby toolchain to provision.
+      # Re-add CocoaPods only if the project passes
+      # `--packagemanager CocoaPods` to `cap add ios`.
 
       # Unsigned, simulator-only. This proves the port builds. It cannot be
       # installed on a device or uploaded to App Store Connect.
+      #
+      # -project, not -workspace: an SPM project has no .xcworkspace, because
+      # the workspace is an artifact of CocoaPods. Building App.xcodeproj lets
+      # xcodebuild resolve CapApp-SPM itself.
       - name: Build for simulator
         working-directory: ios/App
         run: |
           set -uo pipefail
           if xcodebuild \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
