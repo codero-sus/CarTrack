@@ -79,9 +79,33 @@ residual is the drift; there is no separate drift term to tune.
 ## Not yet built
 
 Jumps and ramps, traffic and rivals, damage, a second car or track, engine
-audio, save data, and the native shells (Capacitor for iOS/Android, Electron or
-Tauri for desktop). See [`docs/PLAN.md`](docs/PLAN.md) for the roadmap and
-[`docs/ENGINE_COMPARISON.md`](docs/ENGINE_COMPARISON.md) for the stack decision.
+audio, and save data. The native shells are generated in CI but not committed;
+packaging them for distribution (signed `.ipa`, release `.aab`, desktop
+installers) is still open. See [`docs/PLAN.md`](docs/PLAN.md) for the roadmap
+and [`docs/ENGINE_COMPARISON.md`](docs/ENGINE_COMPARISON.md) for the stack
+decision.
+
+## Continuous integration
+
+Three workflows in `.github/workflows/`, all verified by execution rather than
+by inspection:
+
+| Workflow | Triggers | What it does |
+| --- | --- | --- |
+| `ci.yml` | every push, every PR, manual | typecheck → workflow lint → 41 tests → build, on `ubuntu` / `windows` / `macos` |
+| `release.yml` | `v*` tags, manual | builds the web bundle, zips it, and opens a GitHub Release on tags |
+| `mobile.yml` | PRs touching `src/`, deps, or itself; manual with a `target` input | builds a real Android APK and an unsigned iOS simulator app via Capacitor |
+
+`scripts/lint-workflows.mjs` runs `actionlint` over the workflow files. It uses
+the npm package's Node API, because that package ships no executable for
+`npx actionlint` to find.
+
+The Android and iOS shells are bootstrapped on the runner rather than committed.
+iOS resolves dependencies with Swift Package Manager — Capacitor 8's default —
+so the iOS job has no `pod install` step and builds `App.xcodeproj`, not a
+workspace. `mobile.yml` also triggers on `pull_request` because
+`workflow_dispatch` only resolves once the file exists on the default branch,
+and this workflow is developed on a feature branch.
 
 ## License
 
