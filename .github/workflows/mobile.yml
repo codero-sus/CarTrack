@@ -180,24 +180,71 @@ jobs:
           fi
           npx cap sync ios
 
+      # Diagnostics exist because the runner's own logs may not be reachable
+      # from wherever this is being debugged. Everything printed here is cheap,
+      # and the ::error:: annotations below are readable through the GitHub API
+      # even when the log archive is not.
+      - name: Runner diagnostics
+        run: |
+          set -uo pipefail
+          echo "macOS:     $(sw_vers -productVersion 2>/dev/null || echo unknown)"
+          echo "arch:      $(uname -m)"
+          echo "ruby:      $(ruby -v 2>&1 | head -1 || echo absent)"
+          echo "gem:       $(gem --version 2>&1 | head -1 || echo absent)"
+          echo "pod:       $(pod --version 2>&1 | head -1 || echo ABSENT)"
+          echo "brew:      $(brew --version 2>&1 | head -1 || echo absent)"
+          echo "xcodebuild: $(xcodebuild -version 2>&1 | head -2 | tr '\n' ' ' || echo absent)"
+
+      # CocoaPods is not guaranteed to be preinstalled on the newest macOS
+      # runner images, and a missing `pod` is the most likely cause of a
+      # bare "exit code 1" from the install step.
+      - name: Ensure CocoaPods
+        run: |
+          set -euo pipefail
+          if ! command -v pod >/dev/null 2>&1; then
+            echo "pod not found on PATH - installing via Homebrew"
+            brew install cocoapods
+          fi
+          echo "Using CocoaPods $(pod --version)"
+
       - name: Install pods
         working-directory: ios/App
-        run: pod install --repo-update
+        run: |
+          set -uo pipefail
+          # No --repo-update. It forces a full CDN spec-repo refresh, which is
+          # slow and a well-known source of CI flakiness; the runner's existing
+          # cache is sufficient for Capacitor's own pods.
+          if pod install 2>&1 | tee /tmp/pod.log; then
+            exit 0
+          fi
+          # Surface the failure where it can actually be read.
+          tail -n 30 /tmp/pod.log | while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error title=pod install::${line}"
+          done
+          exit 1
 
       # Unsigned, simulator-only. This proves the port builds. It cannot be
       # installed on a device or uploaded to App Store Connect.
       - name: Build for simulator
         working-directory: ios/App
         run: |
-          set -euo pipefail
-          xcodebuild \
+          set -uo pipefail
+          if xcodebuild \
             -workspace App.xcworkspace \
             -scheme App \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build 2>&1 | tee /tmp/xcode.log; then
+            exit 0
+          fi
+          grep -E "error:|fatal error|The following build commands failed" /tmp/xcode.log \
+            | tail -n 25 \
+            | while IFS= read -r line; do
+                [ -n "$line" ] && echo "::error title=xcodebuild::${line}"
+              done
+          exit 1
 
       - uses: actions/upload-artifact@v7.0.2
         with:
