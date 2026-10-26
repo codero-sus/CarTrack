@@ -38,8 +38,25 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # `shell: bash` is explicit because the default on Windows runners is
+      # PowerShell, and the pipefail/tee/read constructs below are bash. Without
+      # it this step would fail on the windows-latest leg only.
+      #
+      # The annotation plumbing exists because the log archive is not readable
+      # from the environment where this is maintained, and a bare
+      # "Process completed with exit code 1" gives nothing to act on.
       - name: Lint workflows
-        run: npm run lint:workflows
+        shell: bash
+        run: |
+          set -uo pipefail
+          if npm run lint:workflows 2>&1 | tee /tmp/lint.log; then
+            exit 0
+          fi
+          echo "--- linter output (re-emitted as annotations) ---"
+          tail -n 40 /tmp/lint.log | while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error title=lint-workflows::${line}"
+          done
+          exit 1
 
       - name: Test
         run: npm test
