@@ -46,8 +46,16 @@ on:
   # Also runs on pull requests. This is what makes the workflow executable at
   # all while the branch is unmerged: GitHub resolves `pull_request` workflows
   # from the PR HEAD branch, whereas `workflow_dispatch` requires the file to
-  # exist on the default branch and 404s otherwise. Scoped by path so ordinary
-  # pushes do not spend macOS minutes.
+  # exist on the default branch and 404s otherwise.
+  #
+  # The paths filter is NOT a per-commit filter. For `pull_request` GitHub
+  # evaluates it against the cumulative PR diff (base...head), so once the PR
+  # touches any path below, EVERY later push to that branch retriggers this
+  # workflow -- including docs-only commits. Verified: a commit changing only
+  # README.md produced a Mobile run because the PR diff matched 18 paths.
+  # The filter keeps the workflow off unrelated PRs; it does not make pushes to
+  # this PR cheap. The concurrency block below is what actually bounds the
+  # macOS spend.
   pull_request:
     paths:
       - ".github/workflows/mobile.yml"
@@ -57,6 +65,15 @@ on:
 
 permissions:
   contents: read
+
+# Without this, a macOS run already in flight keeps running after a newer push
+# supersedes it, and its minutes are still billed. macOS runners are the
+# expensive ones here, so cancelling superseded runs matters more than on the
+# Linux legs of ci.yml. `cancel-in-progress` cannot abort a queued macOS job
+# that has not started, but it does stop one that is already building.
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   NODE_VERSION: "22"
