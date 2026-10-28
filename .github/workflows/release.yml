@@ -1,0 +1,77 @@
+name: Release
+
+# Tag-driven. Pushing a `v*` tag produces a playable web bundle and attaches it
+# to a GitHub Release. The web build is the reference artefact: it is the same
+# code that ships inside the Capacitor and Electron shells, so a working web
+# release means the shared core is sound.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: "Create as a draft release"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  web:
+    name: Build and publish web bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify before publishing
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Package
+        id: package
+        run: |
+          set -euo pipefail
+          REF="${GITHUB_REF_NAME}"
+          if [ -z "$REF" ] || [ "$REF" = "$(git rev-parse --abbrev-ref HEAD)" ]; then
+            REF="manual-$(date -u +%Y%m%d%H%M%S)"
+          fi
+          NAME="cartrack-web-${REF}.zip"
+          (cd dist && zip -qr "../${NAME}" .)
+          echo "artifact=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "Built ${NAME} ($(du -h "${NAME}" | cut -f1))"
+
+      - name: Upload workflow artefact
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ${{ steps.package.outputs.artifact }}
+          path: ${{ steps.package.outputs.artifact }}
+          if-no-files-found: error
+
+      # Skipped for workflow_dispatch runs without a tag: a release needs a tag
+      # to attach to. The artefact above is still produced either way.
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          DRAFT_FLAG=""
+          if [ "${{ inputs.draft }}" = "true" ]; then DRAFT_FLAG="--draft"; fi
+          gh release create "${GITHUB_REF_NAME}" \
+            "${{ steps.package.outputs.artifact }}" \
+            --title "CarTrack ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            ${DRAFT_FLAG}
